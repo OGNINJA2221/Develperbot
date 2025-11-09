@@ -1,8 +1,11 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
-const { token, clientId } = require('./config.json');
+
+const token = process.env.Discord_Token;
+const clientId = process.env.Discord_ClientId;
+
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-// Keep track of pressed members (in-memory, restart will reset)
+// Track members who pressed the button
 let pressedMembers = new Set();
 
 // Slash command: setupdev
@@ -34,9 +37,8 @@ const rest = new REST({ version: '10' }).setToken(token);
 
 client.once('ready', () => console.log(`Logged in as ${client.user.tag}`));
 
-// Interaction handling
+// Handle interactions
 client.on('interactionCreate', async interaction => {
-    // Button pressed
     if (interaction.isButton()) {
         if (interaction.customId === 'form_dev_group') {
             if (pressedMembers.has(interaction.user.id)) {
@@ -45,9 +47,7 @@ client.on('interactionCreate', async interaction => {
             pressedMembers.add(interaction.user.id);
 
             let memberRole = interaction.guild.roles.cache.find(r => r.name === 'member pressed');
-            if (!memberRole) {
-                memberRole = await interaction.guild.roles.create({ name: 'member pressed', mentionable: false });
-            }
+            if (!memberRole) memberRole = await interaction.guild.roles.create({ name: 'member pressed', mentionable: false });
             await interaction.member.roles.add(memberRole);
             await interaction.reply({ content: 'You pressed the button! Waiting for groups…', ephemeral: true });
         }
@@ -59,7 +59,6 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Slash command: /setupdev
     if (interaction.isChatInputCommand() && interaction.commandName === 'setupdev') {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: 'Only admins can use this!', ephemeral: true });
@@ -72,9 +71,7 @@ client.on('interactionCreate', async interaction => {
             pressedMembers.has(m.id) && m.roles.cache.has(role.id)
         );
 
-        if (candidates.size === 0) {
-            return interaction.reply({ content: 'No members pressed the button with that role.', ephemeral: true });
-        }
+        if (candidates.size === 0) return interaction.reply({ content: 'No members pressed the button with that role.', ephemeral: true });
 
         await interaction.reply({ content: `Found ${candidates.size} members! Creating groups…`, ephemeral: true });
 
@@ -84,10 +81,7 @@ client.on('interactionCreate', async interaction => {
         while (membersArray.length > 0) {
             const groupMembers = membersArray.splice(0, groupSize);
 
-            const groupRole = await interaction.guild.roles.create({
-                name: `Group ${groupCounter} (${role.name})`,
-                mentionable: true
-            });
+            const groupRole = await interaction.guild.roles.create({ name: `Group ${groupCounter} (${role.name})`, mentionable: true });
 
             const groupChannel = await interaction.guild.channels.create({
                 name: `group-${groupCounter}`,
@@ -100,13 +94,12 @@ client.on('interactionCreate', async interaction => {
 
             groupMembers.forEach(m => m.roles.add(groupRole));
 
-            const acceptRow = new ActionRowBuilder()
-                .addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`accept_group_${groupCounter}`)
-                        .setLabel('Accept')
-                        .setStyle(ButtonStyle.Primary)
-                );
+            const acceptRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`accept_group_${groupCounter}`)
+                    .setLabel('Accept')
+                    .setStyle(ButtonStyle.Primary)
+            );
 
             const embed = new EmbedBuilder()
                 .setTitle(`Group ${groupCounter}`)
@@ -121,16 +114,11 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Admin command to initialize the Form Dev Group button
+// Admin command to deploy Form Dev Group button
 client.on('messageCreate', async message => {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-
     if (message.content.toLowerCase() === '!initform') {
-        const button = new ButtonBuilder()
-            .setCustomId('form_dev_group')
-            .setLabel('Form Dev Group')
-            .setStyle(ButtonStyle.Success);
-
+        const button = new ButtonBuilder().setCustomId('form_dev_group').setLabel('Form Dev Group').setStyle(ButtonStyle.Success);
         const row = new ActionRowBuilder().addComponents(button);
 
         const embed = new EmbedBuilder()
