@@ -1,10 +1,8 @@
-const { Client, GatewayIntentBits, Partials, REST, Routes, SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { token, clientId } = require('./config.json');
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent] });
 
-const token = "MTQzNzA3NDcyMjIwNTcyODgyMA.GiLyhT.pg3Gq3hpSbbIWklpe7r0H2YmdpGq9HNAmyNFbs"; // replace with your bot token
-const clientId = "1437074722205728820"; // replace with your bot client ID
-
-// Keep track of members who pressed the button
+// Keep track of pressed members (in-memory, restart will reset)
 let pressedMembers = new Set();
 
 // Slash command: setupdev
@@ -23,7 +21,7 @@ const commands = [
         .toJSON()
 ];
 
-// Register commands
+// Register slash commands
 const rest = new REST({ version: '10' }).setToken(token);
 (async () => {
     try {
@@ -36,9 +34,10 @@ const rest = new REST({ version: '10' }).setToken(token);
 
 client.once('ready', () => console.log(`Logged in as ${client.user.tag}`));
 
+// Interaction handling
 client.on('interactionCreate', async interaction => {
+    // Button pressed
     if (interaction.isButton()) {
-        // "Form Dev Group" pressed
         if (interaction.customId === 'form_dev_group') {
             if (pressedMembers.has(interaction.user.id)) {
                 return interaction.reply({ content: 'You already pressed the button!', ephemeral: true });
@@ -53,7 +52,6 @@ client.on('interactionCreate', async interaction => {
             await interaction.reply({ content: 'You pressed the button! Waiting for groups…', ephemeral: true });
         }
 
-        // Accept group
         if (interaction.customId.startsWith('accept_group_')) {
             const groupName = interaction.customId.split('_')[2];
             await interaction.member.send(`Your group is ${groupName}!`);
@@ -61,7 +59,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Slash command
+    // Slash command: /setupdev
     if (interaction.isChatInputCommand() && interaction.commandName === 'setupdev') {
         if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
             return interaction.reply({ content: 'Only admins can use this!', ephemeral: true });
@@ -70,7 +68,6 @@ client.on('interactionCreate', async interaction => {
         const role = interaction.options.getRole('role');
         const groupSize = interaction.options.getInteger('group_size');
 
-        // Filter members who pressed button and have the role
         const candidates = interaction.guild.members.cache.filter(m =>
             pressedMembers.has(m.id) && m.roles.cache.has(role.id)
         );
@@ -87,13 +84,11 @@ client.on('interactionCreate', async interaction => {
         while (membersArray.length > 0) {
             const groupMembers = membersArray.splice(0, groupSize);
 
-            // Create group role
             const groupRole = await interaction.guild.roles.create({
                 name: `Group ${groupCounter} (${role.name})`,
                 mentionable: true
             });
 
-            // Create private text channel
             const groupChannel = await interaction.guild.channels.create({
                 name: `group-${groupCounter}`,
                 type: ChannelType.GuildText,
@@ -103,10 +98,8 @@ client.on('interactionCreate', async interaction => {
                 ]
             });
 
-            // Assign group roles
             groupMembers.forEach(m => m.roles.add(groupRole));
 
-            // Send embed with Accept button
             const acceptRow = new ActionRowBuilder()
                 .addComponents(
                     new ButtonBuilder()
@@ -128,7 +121,7 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Command to deploy Form Dev Group button
+// Admin command to initialize the Form Dev Group button
 client.on('messageCreate', async message => {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
